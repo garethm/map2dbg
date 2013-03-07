@@ -1,7 +1,11 @@
+--
+
 Code forked from https://code.google.com/p/map2dbg/
 
 Released by André Mussche
 Licence: New BSD License
+
+--
 
 Map2Dbg is a mall tool to convert a .map file to a .dbg file.
 
@@ -18,3 +22,7 @@ Convert more debug info (e.g. line numbering, source file names)
 Port it to Delphi (so it can be included in Delphi projects)
 Make a plugin for Delphi/CBuilder, so converting is done after each build
 Because of my little knowledge and experience of C++: if you can help me with point 2 (line numbering + source files), that would be very nice!
+
+--
+
+Instructions for which this tool is useful: http://capnbry.net/blog/?p=18
