@@ -240,7 +240,7 @@
 			>
 		</Filter>
 		<File
-			RelativePath=".\ReadMe.txt"
+			RelativePath="..\README.md"
 			>
 		</File>
 	</Files>

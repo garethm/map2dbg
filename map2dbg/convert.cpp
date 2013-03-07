@@ -51,8 +51,7 @@ bool iinit() {
 	}
 	pMapAndLoad = (MAPANDLOADPROC)GetProcAddress(himagehlp,"MapAndLoad");
 	pUnMapAndLoad = (UNMAPANDLOADPROC)GetProcAddress(himagehlp,"UnMapAndLoad");
-	if (pMapAndLoad==0 || pUnMapAndLoad==0)
-	{
+	if (pMapAndLoad==0 || pUnMapAndLoad==0) {
 		FreeLibrary(himagehlp);
 		himagehlp=NULL;
 		std::cerr << "The system DLL imagehlp.dll did not have the required functionality.";
@@ -61,21 +60,20 @@ bool iinit() {
 	issucc = true;
 	return true;
 }
-void iexit()
-{
+
+void iexit() {
 	if (himagehlp!=NULL)
 		FreeLibrary(himagehlp);
 	himagehlp = NULL;
 	isinit = false;
 }
 
-class TAutoExitClass
-{
-  public: ~TAutoExitClass()
-  {
-	iexit();
-  }
-} DummyAutoExit;
+class TAutoExitClass {
+public: 
+	~TAutoExitClass()  {
+		iexit();
+	}
+};
 
 //============================================================================
 // TDebugFile -- for creating a .DBG file from scratch
@@ -166,8 +164,7 @@ protected:
 };
 
 
-bool TDebugFile::EnsureStarted()
-{
+bool TDebugFile::EnsureStarted() {
 	if (file!=NULL)
 		return true;
 
@@ -197,8 +194,7 @@ bool TDebugFile::EnsureStarted()
 }
 
 
-bool TDebugFile::AddSymbol(unsigned short seg, unsigned long offset, std::string symbol)
-{
+bool TDebugFile::AddSymbol(unsigned short seg, unsigned long offset, std::string symbol) {
 	EnsureStarted();
 	if (file==NULL)
 		return false;
@@ -226,138 +222,155 @@ bool TDebugFile::AddSymbol(unsigned short seg, unsigned long offset, std::string
 }
 
 
-bool TDebugFile::End()
-{
-  int numsecs = image.NumberOfSections;
-  unsigned long cvoSegMap = cvoGlobalPub + gpoSym;
-  unsigned long szSegMap  = sizeof(OMFSegMap) + numsecs*sizeof(OMFSegMapDesc);
-  unsigned long szCv      = cvoSegMap + szSegMap;
-  if (numsecs>=0xFFFF)
-	return false; // OMFSegDesc only uses 'unsigned short'
+bool TDebugFile::End() {
+	int numsecs = image.NumberOfSections;
+	unsigned long cvoSegMap = cvoGlobalPub + gpoSym;
+	unsigned long szSegMap  = sizeof(OMFSegMap) + numsecs*sizeof(OMFSegMapDesc);
+	unsigned long szCv      = cvoSegMap + szSegMap;
+	if (numsecs>=0xFFFF)
+		return false; // OMFSegDesc only uses 'unsigned short'
 
-  EnsureStarted();
-  if (file==NULL)
-	return false;
-  fseek(file,0,SEEK_SET);
-  //
-  // WriteDBGHeader
-  IMAGE_SEPARATE_DEBUG_HEADER isdh;
-  isdh.Signature = IMAGE_SEPARATE_DEBUG_SIGNATURE;
-  isdh.Flags = 0;
-  isdh.Machine            = image.FileHeader->FileHeader.Machine;
-  isdh.Characteristics    = image.FileHeader->FileHeader.Characteristics;
-  isdh.TimeDateStamp      = image.FileHeader->FileHeader.TimeDateStamp;
-  isdh.CheckSum           = image.FileHeader->OptionalHeader.CheckSum;
-  isdh.ImageBase          = image.FileHeader->OptionalHeader.ImageBase;
-  isdh.SizeOfImage        = image.FileHeader->OptionalHeader.SizeOfImage;
-  isdh.NumberOfSections   = numsecs;
-  isdh.ExportedNamesSize  = 0;
-  isdh.DebugDirectorySize = 1*sizeof(IMAGE_DEBUG_DIRECTORY);
-  isdh.SectionAlignment   = image.FileHeader->OptionalHeader.SectionAlignment;
-  fwrite( &isdh,sizeof(isdh),1,file);
-  //
-  // WriteSectionTable
-  check(sizeof(IMAGE_SEPARATE_DEBUG_HEADER),"Section table");
-  fwrite(image.Sections, sizeof(IMAGE_SECTION_HEADER), numsecs, file);
-  //
-  // WriteDbgDirectory
-  check(sizeof(IMAGE_SEPARATE_DEBUG_HEADER) + numsecs*sizeof(IMAGE_SECTION_HEADER),"Debug directory");
-  IMAGE_DEBUG_DIRECTORY idd;
-  idd.Characteristics = 0;
-  idd.TimeDateStamp = image.FileHeader->FileHeader.TimeDateStamp;
-  idd.MajorVersion = 0;
-  idd.MinorVersion = 0;
-  idd.Type = IMAGE_DEBUG_TYPE_CODEVIEW;
-  idd.SizeOfData = szCv;
-  idd.AddressOfRawData = 0;
-  idd.PointerToRawData = oCv;
-  fwrite( &idd, sizeof(idd), 1, file );
-  //
-  // WriteCV - misc
-  check(oCv, "CV data");
-  OMFSignature omfsig = { {'N','B','0','9'}, sizeof(omfsig) };
-  fwrite( &omfsig, sizeof(omfsig), 1, file );
-  // WriteCV - misc - dirheader
-  OMFDirHeader omfdirhdr;
-  omfdirhdr.cbDirHeader = sizeof(omfdirhdr);
-  omfdirhdr.cbDirEntry = sizeof(OMFDirEntry);
-  omfdirhdr.cDir = 3;
-  omfdirhdr.lfoNextDir = 0;
-  omfdirhdr.flags = 0;
-  fwrite( &omfdirhdr, sizeof(omfdirhdr), 1, file );
-  // WriteCV - misc - direntry[0]: sstModule
-  OMFDirEntry omfdirentry;
-  omfdirentry.SubSection = sstModule;
-  omfdirentry.iMod = 1;
-  omfdirentry.lfo = cvoSstModule;
-  omfdirentry.cb = szSstModule;
-  fwrite( &omfdirentry, sizeof(omfdirentry), 1, file );
-  // WriteCV - misc - direntry[1]: sstGlobalPub
-  omfdirentry.SubSection = sstGlobalPub;
-  omfdirentry.iMod = 0xFFFF;
-  omfdirentry.lfo = cvoGlobalPub;
-  omfdirentry.cb = gpoSym;
-  fwrite( &omfdirentry, sizeof(omfdirentry), 1, file );
-  // WriteCV - misc - direntry[2]: sstSegMap
-  omfdirentry.SubSection = sstSegMap;
-  omfdirentry.iMod = 0xFFFF;
-  omfdirentry.lfo = cvoSegMap;
-  omfdirentry.cb = szSegMap;
-  fwrite( &omfdirentry, sizeof(omfdirentry), 1, file );
-  //
-  // WriteSstModule
-  check(oCv + cvoSstModule, "CV:SST module");
-  OMFModule omfmodule;
-  omfmodule.ovlNumber = 0;
-  omfmodule.iLib = 0;
-  omfmodule.cSeg = (unsigned short)numsecs;
-  omfmodule.Style[0] = 'C';
-  omfmodule.Style[1] = 'V';
-  fwrite( &omfmodule, offsetof(OMFModule,SegInfo), 1, file );
-  // WriteSstModule - numsecs*OMFSegDesc
-  for (int i = 0; i < numsecs; i++ )
-  { OMFSegDesc omfsegdesc;
-	omfsegdesc.Seg = (unsigned short)(i+1);
-	omfsegdesc.pad = 0;
-	omfsegdesc.Off = 0;
-	omfsegdesc.cbSeg = image.Sections[i].Misc.VirtualSize;
-	fwrite( &omfsegdesc, sizeof(omfsegdesc), 1, file );
-  }
-  // WriteSstModule - modname
-  fwrite( modname.c_str(), szModName, 1, file );
-  //
-  // WriteGlobalPub
-  check(oCv + cvoGlobalPub,"CV:GlobalPub module");
-  OMFSymHash omfSymHash;
-  omfSymHash.cbSymbol = gpoSym - sizeof(OMFSymHash);
-  omfSymHash.symhash = 0; // No symbol or address hash tables...
-  omfSymHash.addrhash = 0;
-  omfSymHash.cbHSym = 0;
-  omfSymHash.cbHAddr = 0;
-  fwrite( &omfSymHash, sizeof(omfSymHash), 1, file );
-  // WriteGlobal - symbols
-  fseek(file, oCv + cvoSegMap, SEEK_SET);
-  //
-  // WriteSegMap
-  check(oCv + cvoSegMap,"CV:SegMap module");
-  OMFSegMap omfSegMap = {(unsigned short)numsecs,(unsigned short)numsecs};
-  fwrite( &omfSegMap, sizeof(OMFSegMap), 1, file );
-  // WriteSegMap - nsec*OMFSegMapDesc
-  for (int i = 1; i <= numsecs; i++ )
-  { OMFSegMapDesc omfSegMapDesc;
-	omfSegMapDesc.flags = 0;
-	omfSegMapDesc.ovl = 0;
-	omfSegMapDesc.group = 0;
-	omfSegMapDesc.frame = (unsigned short)i;
-	omfSegMapDesc.iSegName = 0xFFFF;
-	omfSegMapDesc.iClassName = 0xFFFF;
-	omfSegMapDesc.offset = 0;
-	omfSegMapDesc.cbSeg = image.Sections[i-1].Misc.VirtualSize;
-	fwrite( &omfSegMapDesc, sizeof(OMFSegMapDesc), 1, file );
-  }
-  //
-  check(oCv + szCv,"CV:end");
-  return (err == "");
+	EnsureStarted();
+	if (file==NULL)
+		return false;
+	fseek(file,0,SEEK_SET);
+
+	//
+	// WriteDBGHeader
+	IMAGE_SEPARATE_DEBUG_HEADER isdh;
+	isdh.Signature = IMAGE_SEPARATE_DEBUG_SIGNATURE;
+	isdh.Flags = 0;
+	isdh.Machine            = image.FileHeader->FileHeader.Machine;
+	isdh.Characteristics    = image.FileHeader->FileHeader.Characteristics;
+	isdh.TimeDateStamp      = image.FileHeader->FileHeader.TimeDateStamp;
+	isdh.CheckSum           = image.FileHeader->OptionalHeader.CheckSum;
+	isdh.ImageBase          = image.FileHeader->OptionalHeader.ImageBase;
+	isdh.SizeOfImage        = image.FileHeader->OptionalHeader.SizeOfImage;
+	isdh.NumberOfSections   = numsecs;
+	isdh.ExportedNamesSize  = 0;
+	isdh.DebugDirectorySize = 1*sizeof(IMAGE_DEBUG_DIRECTORY);
+	isdh.SectionAlignment   = image.FileHeader->OptionalHeader.SectionAlignment;
+	fwrite( &isdh,sizeof(isdh),1,file);
+  
+	//
+	// WriteSectionTable
+	check(sizeof(IMAGE_SEPARATE_DEBUG_HEADER),"Section table");
+	fwrite(image.Sections, sizeof(IMAGE_SECTION_HEADER), numsecs, file);
+
+	//
+	// WriteDbgDirectory
+	check(sizeof(IMAGE_SEPARATE_DEBUG_HEADER) + numsecs*sizeof(IMAGE_SECTION_HEADER),"Debug directory");
+	IMAGE_DEBUG_DIRECTORY idd;
+	idd.Characteristics = 0;
+	idd.TimeDateStamp = image.FileHeader->FileHeader.TimeDateStamp;
+	idd.MajorVersion = 0;
+	idd.MinorVersion = 0;
+	idd.Type = IMAGE_DEBUG_TYPE_CODEVIEW;
+	idd.SizeOfData = szCv;
+	idd.AddressOfRawData = 0;
+	idd.PointerToRawData = oCv;
+	fwrite( &idd, sizeof(idd), 1, file );
+
+	//
+	// WriteCV - misc
+	check(oCv, "CV data");
+	OMFSignature omfsig = { {'N','B','0','9'}, sizeof(omfsig) };
+	fwrite( &omfsig, sizeof(omfsig), 1, file );
+
+	// WriteCV - misc - dirheader
+	OMFDirHeader omfdirhdr;
+	omfdirhdr.cbDirHeader = sizeof(omfdirhdr);
+	omfdirhdr.cbDirEntry = sizeof(OMFDirEntry);
+	omfdirhdr.cDir = 3;
+	omfdirhdr.lfoNextDir = 0;
+	omfdirhdr.flags = 0;
+	fwrite( &omfdirhdr, sizeof(omfdirhdr), 1, file );
+
+	// WriteCV - misc - direntry[0]: sstModule
+	OMFDirEntry omfdirentry;
+	omfdirentry.SubSection = sstModule;
+	omfdirentry.iMod = 1;
+	omfdirentry.lfo = cvoSstModule;
+	omfdirentry.cb = szSstModule;
+	fwrite( &omfdirentry, sizeof(omfdirentry), 1, file );
+
+	// WriteCV - misc - direntry[1]: sstGlobalPub
+	omfdirentry.SubSection = sstGlobalPub;
+	omfdirentry.iMod = 0xFFFF;
+	omfdirentry.lfo = cvoGlobalPub;
+	omfdirentry.cb = gpoSym;
+	fwrite( &omfdirentry, sizeof(omfdirentry), 1, file );
+
+	// WriteCV - misc - direntry[2]: sstSegMap
+	omfdirentry.SubSection = sstSegMap;
+	omfdirentry.iMod = 0xFFFF;
+	omfdirentry.lfo = cvoSegMap;
+	omfdirentry.cb = szSegMap;
+	fwrite( &omfdirentry, sizeof(omfdirentry), 1, file );
+
+	//
+	// WriteSstModule
+	check(oCv + cvoSstModule, "CV:SST module");
+	OMFModule omfmodule;
+	omfmodule.ovlNumber = 0;
+	omfmodule.iLib = 0;
+	omfmodule.cSeg = (unsigned short)numsecs;
+	omfmodule.Style[0] = 'C';
+	omfmodule.Style[1] = 'V';
+	fwrite( &omfmodule, offsetof(OMFModule,SegInfo), 1, file );
+
+	// WriteSstModule - numsecs*OMFSegDesc
+	for (int i = 0; i < numsecs; i++ )
+	{ 
+		OMFSegDesc omfsegdesc;
+		omfsegdesc.Seg = (unsigned short)(i+1);
+		omfsegdesc.pad = 0;
+		omfsegdesc.Off = 0;
+		omfsegdesc.cbSeg = image.Sections[i].Misc.VirtualSize;
+		fwrite( &omfsegdesc, sizeof(omfsegdesc), 1, file );
+	}
+  
+	// WriteSstModule - modname
+	fwrite( modname.c_str(), szModName, 1, file );
+  
+	//
+	// WriteGlobalPub
+	check(oCv + cvoGlobalPub,"CV:GlobalPub module");
+	OMFSymHash omfSymHash;
+	omfSymHash.cbSymbol = gpoSym - sizeof(OMFSymHash);
+	omfSymHash.symhash = 0; // No symbol or address hash tables...
+	omfSymHash.addrhash = 0;
+	omfSymHash.cbHSym = 0;
+	omfSymHash.cbHAddr = 0;
+	fwrite( &omfSymHash, sizeof(omfSymHash), 1, file );
+
+	// WriteGlobal - symbols
+	fseek(file, oCv + cvoSegMap, SEEK_SET);
+
+	//
+	// WriteSegMap
+	check(oCv + cvoSegMap,"CV:SegMap module");
+	OMFSegMap omfSegMap = {(unsigned short)numsecs,(unsigned short)numsecs};
+	fwrite( &omfSegMap, sizeof(OMFSegMap), 1, file );
+
+	// WriteSegMap - nsec*OMFSegMapDesc
+	for (int i = 1; i <= numsecs; i++ )
+	{ 
+		OMFSegMapDesc omfSegMapDesc;
+		omfSegMapDesc.flags = 0;
+		omfSegMapDesc.ovl = 0;
+		omfSegMapDesc.group = 0;
+		omfSegMapDesc.frame = (unsigned short)i;
+		omfSegMapDesc.iSegName = 0xFFFF;
+		omfSegMapDesc.iClassName = 0xFFFF;
+		omfSegMapDesc.offset = 0;
+		omfSegMapDesc.cbSeg = image.Sections[i-1].Misc.VirtualSize;
+		fwrite( &omfSegMapDesc, sizeof(OMFSegMapDesc), 1, file );
+	}
+
+	//
+	check(oCv + szCv,"CV:end");
+	return (err == "");
 }
 
 
@@ -389,8 +402,7 @@ public:
 };
 
 
-TMapFile::TMapFile(std::string fnmap)
-{
+TMapFile::TMapFile(std::string fnmap) {
 	err = "";
 	isok = false;
 	str = LoadLines( fnmap );
@@ -401,7 +413,9 @@ TMapFile::TMapFile(std::string fnmap)
 	std::string s;
 	for (size_t i = 0; i < str.size(); i++) {
 		s = str.at(i);
-		if (s.find_first_of(" Publics by Value") != std::string::npos) {
+		size_t pos = s.find(" Publics by Value");
+		size_t invalid_pos = std::string::npos;
+		if (pos != invalid_pos) {
 			line = i;
 			break;
 		}
@@ -419,57 +433,54 @@ TMapFile::TMapFile(std::string fnmap)
 	}
 }
 
-bool TMapFile::GetSymbol(unsigned short *aseg, unsigned long *aoff, std::string *aname)
-{
-  if (line==0)
-	return false;
-  if (err!="")
-	return false;
-  while (line < str.size() && str.at(line) == "") 
-	  line++;
-  if (line == str.size())
-	return false;
-  std::string s = str.at(line);
+bool TMapFile::GetSymbol(unsigned short *aseg, unsigned long *aoff, std::string *aname) {
+	if (line==0)
+		return false;
+	if (err!="")
+		return false;
+	while (line < str.size() && str.at(line) == "") 
+		line++;
+	if (line == str.size())
+		return false;
+	std::string s = str.at(line);
 
-  //example of some lines:
-  // 0001:0000035C       System.CloseHandle
-  // 0001:00000380  __acrtused
+	//example of some lines:
+	// 0001:0000035C       System.CloseHandle
+	// 0001:00000380  __acrtused
 
-  line++;
-  if (s.size()<15)          //minimal size = 15
-	return false;
-  std::string sseg = s.substr(1,4);
-  for (size_t i=1; i<=sseg.size(); i++)
-  {
-	char c = sseg[i];
-	bool okay = (c>='0' && c<='9') || (c>='A' && c<='F') || (c>='a' && c<='f');
-	if (!okay)
-	  return false;
-  }
-  std::string soff=s.substr(6,8);
-  for (size_t i=1; i<soff.size(); i++)
-  {
-	char c = soff[i];
-	bool okay = (c>='0' && c<='9') || (c>='A' && c<='F') || (c>='a' && c<='f');
-	if (!okay)
-	  return false;
-  }
-  //AnsiString sname = Trim(s.SubString(21,s.Length()-20));
-  std::string sname = trim(s.substr(14, std::string::npos));      //minimal size = 15
-  unsigned int val;
-  int i;
-  i = sscanf_s(sseg.c_str(),"%x",&val);
-  if (i!=1)
-	return false;
-  if (val>0xFFFF)
-	return false;
-  *aseg = (unsigned short)val;
-  i = sscanf_s(soff.c_str(),"%x",&val);
-  if (i!=1)
-	return false;
-  *aoff  = val;
-  *aname = sname;
-  return true;
+	line++;
+	if (s.size()<15)          //minimal size = 15
+		return false;
+	std::string sseg = s.substr(1,4);
+	for (size_t i=0; i<sseg.size(); i++) {
+		char c = sseg[i];
+		bool okay = (c>='0' && c<='9') || (c>='A' && c<='F') || (c>='a' && c<='f');
+		if (!okay)
+			return false;
+	}
+	std::string soff=s.substr(6,8);
+	for (size_t i=1; i<soff.size(); i++) {
+		char c = soff[i];
+		bool okay = (c>='0' && c<='9') || (c>='A' && c<='F') || (c>='a' && c<='f');
+		if (!okay)
+			return false;
+	}
+
+	std::string sname = trim(s.substr(14, std::string::npos));      //minimal size = 15
+	unsigned int val;
+	int i;
+	i = sscanf_s(sseg.c_str(),"%x",&val);
+	if (i!=1)
+		return false;
+	if (val>0xFFFF)
+		return false;
+	*aseg = (unsigned short)val;
+	i = sscanf_s(soff.c_str(),"%x",&val);
+	if (i!=1)
+		return false;
+	*aoff  = val;
+	*aname = sname;
+	return true;
 }
 
 //============================================================================
@@ -478,8 +489,7 @@ bool TMapFile::GetSymbol(unsigned short *aseg, unsigned long *aoff, std::string 
 // to bother reading the map or writing the dbg, but merely mark the executable.
 //============================================================================
 //
-int convert(std::string exe, std::string &err)
-{
+int convert(std::string exe, std::string &err) {
 	if (!iinit()) {
 		err = "imagehlp.dll could not be loaded.";
 		return 0;
